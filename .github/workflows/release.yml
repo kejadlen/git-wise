@@ -7,15 +7,13 @@ on:
 
 name: Create Release
 
-defaults:
-  runs-on: ${{ matrix.os }}
-  strategy:
-    matrix:
-      os: [ ubuntu-latest, macos-latest, windows-latest ]
-
 jobs:
   test:
     name: Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -48,6 +46,10 @@ jobs:
   build:
     name: Build Binaries
     needs: release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
