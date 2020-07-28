@@ -8,44 +8,8 @@ on:
 name: Create Release
 
 jobs:
-  # test:
-  #   name: Test Suite
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       os: [ ubuntu-latest, macos-latest, windows-latest ]
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - uses: actions-rs/toolchain@v1
-  #       with:
-  #         profile: minimal
-  #         toolchain: stable
-  #         override: true
-  #     - uses: actions-rs/cargo@v1
-  #       with:
-  #         command: test
-
-  # release:
-  #   name: Create Release
-  #   needs: test
-  #   runs-on: ubuntu-latest
-  #   outputs:
-  #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v2
-  #     - name: Create Release
-  #       id: create_release
-  #       uses: actions/create-release@v1
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         tag_name: ${{ github.ref }}
-  #         release_name: ${{ github.ref }}
-
-  build:
-    name: Build Binaries
-    # needs: release
+  test:
+    name: Test Suite
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -57,10 +21,46 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      # - uses: actions-rs/cargo@v1
-      #   with:
-      #     command: build
-      #     args: --release
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  release:
+    name: Create Release
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+
+  build:
+    name: Build Binaries
+    needs: release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
 
       - name: Set Asset Names
         id: vars
@@ -70,55 +70,52 @@ jobs:
           echo "::set-output name=non_windows_asset::git-together-${GITHUB_REF#refs/*/}-${triple}.tar.gz"
         shell: bash
 
-      - name: Debug
+      - name: Create Windows Asset
+        if: matrix.os == 'windows-latest'
         run: |
-          echo ${{ steps.vars.outputs.windows_asset }}
-          echo ${{ steps.vars.outputs.non_windows_asset }}
+          $SRC_DIR = $pwd.Path
+          $STAGE = [System.Guid]::NewGuid().ToString()
 
-      # - if: matrix.os == 'windows-latest'
-      #   run: |
-      #     $SRC_DIR = $pwd.Path
-      #     $STAGE = [System.Guid]::NewGuid().ToString()
+          Set-Location $env:TEMP
+          New-Item -Type Directory -Name $STAGE
+          Set-Location $STAGE
 
-      #     Set-Location $env:TEMP
-      #     New-Item -Type Directory -Name $STAGE
-      #     Set-Location $STAGE
+          $ZIP = "$SRC_DIR\${{ steps.vars.outputs.windows_asset }}"
 
-      #     $ZIP = "$SRC_DIR\${{ steps.vars.outputs.windows_asset }}"
+          Copy-Item "$SRC_DIR\target\release\git-together.exe" '.\'
 
-      #     Copy-Item "$SRC_DIR\target\release\git-together.exe" '.\'
+          7z a "$ZIP" *
 
-      #     7z a "$ZIP" *
+          Copy-Item "$ZIP" "$SRC_DIR"
 
-      #     Copy-Item "$ZIP" "$SRC_DIR"
+          Remove-Item *.* -Force
+          Set-Location ..
+          Remove-Item $STAGE
+          Set-Location $SRC_DIR
 
-      #     Remove-Item *.* -Force
-      #     Set-Location ..
-      #     Remove-Item $STAGE
-      #     Set-Location $SRC_DIR
+      - name: Create Non-Windows Asset
+        if: matrix.os != 'windows-latest'
+        run: |
+          tar -zvc target/release/git-together > ${{ steps.vars.outputs.not_windows_asset }}
 
-      # - if: matrix.os != 'windows-latest'
-      #   run: |
-      #     tar -zvc target/release/git-together > ${{ steps.vars.outputs.not_windows_asset }}
+      - name: Upload Windows Release Asset
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./${{ steps.vars.outputs.windows_asset }}
+          asset_name: ${{ steps.vars.outputs.windows_asset }}
+          asset_content_type: application/zip
 
-      # - name: Upload Windows Release Asset
-      #   if: matrix.os == 'windows-latest'
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ needs.release.outputs.upload_url }}
-      #     asset_path: ./${{ steps.vars.outputs.windows_asset }}
-      #     asset_name: ${{ steps.vars.outputs.windows_asset }}
-      #     asset_content_type: application/zip
-
-      # - name: Upload Non-Windows Release Asset
-      #   if: matrix.os != 'windows-latest'
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ needs.release.outputs.upload_url }}
-      #     asset_path: ./${{ steps.vars.outputs.not_windows_asset }}
-      #     asset_name: ${{ steps.vars.outputs.not_windows_asset }}
-      #     asset_content_type: application/gzip
+      - name: Upload Non-Windows Release Asset
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./${{ steps.vars.outputs.not_windows_asset }}
+          asset_name: ${{ steps.vars.outputs.not_windows_asset }}
+          asset_content_type: application/gzip
