@@ -86,8 +86,6 @@ jobs:
 
           7z a "$ZIP" *
 
-          Copy-Item "$ZIP" "$SRC_DIR"
-
           Remove-Item *.* -Force
           Set-Location ..
           Remove-Item $STAGE
