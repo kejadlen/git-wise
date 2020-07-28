@@ -1,14 +1,22 @@
-on: [ push, pull_request ]
+on:
+  push:
+    branches-ignore:
+      - ci
+  pull_request:
+    branches:
+      - master
 
 name: CI
+
+defaults:
+  runs-on: ${{ matrix.os }}
+  strategy:
+    matrix:
+      os: [ ubuntu-latest, macos-latest, windows-latest ]
 
 jobs:
   check:
     name: Check
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -22,10 +30,6 @@ jobs:
 
   test:
     name: Test Suite
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -39,10 +43,6 @@ jobs:
 
   fmt:
     name: Rustfmt
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -58,10 +58,6 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1

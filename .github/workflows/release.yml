@@ -1,0 +1,113 @@
+on:
+  push:
+    branches:
+      - ci
+    tags:
+      - 'v*'
+
+name: Create Release
+
+defaults:
+  runs-on: ${{ matrix.os }}
+  strategy:
+    matrix:
+      os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+jobs:
+  test:
+    name: Test Suite
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  release:
+    name: Create Release
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+
+  build:
+    name: Build Binaries
+    needs: release
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      - id: vars
+        run: |
+          triple=$(rustup show active-toolchain | awk '{print $1}')
+          echo "::set-output name=windows_asset::git-together-${{ github.ref }}-${triple}.zip"
+          echo "::set-output name=not_windows_asset::git-together-${{ github.ref }}-${triple}.tar.gz"
+
+      - if: matrix.os == 'windows-latest'
+        run: |
+          $SRC_DIR = $pwd.Path
+          $STAGE = [System.Guid]::NewGuid().ToString()
+
+          Set-Location $env:TEMP
+          New-Item -Type Directory -Name $STAGE
+          Set-Location $STAGE
+
+          $ZIP = "$SRC_DIR\${{ steps.vars.outputs.windows_asset }}"
+
+          Copy-Item "$SRC_DIR\target\release\git-together.exe" '.\'
+
+          7z a "$ZIP" *
+
+          Copy-Item "$ZIP" "$SRC_DIR"
+
+          Remove-Item *.* -Force
+          Set-Location ..
+          Remove-Item $STAGE
+          Set-Location $SRC_DIR
+
+      - if: matrix.os != 'windows-latest'
+        run: |
+          tar -zvc target/release/git-together > ${{ steps.vars.outputs.not_windows_asset }}
+
+      - name: Upload Windows Release Asset
+        if: matrix.os == 'windows-latest'
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./${{ steps.vars.outputs.windows_asset }}
+
+      - name: Upload Not Windows Release Asset
+        if: matrix.os != 'windows-latest'
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: ./${{ steps.vars.outputs.not_windows_asset }}
