@@ -62,11 +62,12 @@ jobs:
           command: build
           args: --release
 
-      - id: vars
+      - name: Set Asset Names
+        id: vars
         run: |
           triple=$(rustup show active-toolchain | awk '{print $1}')
-          echo "::set-output name=windows_asset::git-together-${{ github.ref }}-${triple}.zip"
-          echo "::set-output name=not_windows_asset::git-together-${{ github.ref }}-${triple}.tar.gz"
+          echo "::set-output name=windows_asset::git-together-${GITHUB_REF#refs/*/}-${triple}.zip"
+          echo "::set-output name=not_windows_asset::git-together-${GITHUB_REF#refs/*/}-${triple}.tar.gz"
 
       - if: matrix.os == 'windows-latest'
         run: |
