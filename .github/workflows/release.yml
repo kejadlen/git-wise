@@ -63,15 +63,15 @@ jobs:
       #     args: --release
 
       - name: Set Windows Asset Names
+        if: matrix.os == 'windows-latest'
         id: windows
-      - if: matrix.os == 'windows-latest'
         run: |
           triple=$(rustup show active-toolchain | %{ $_.Split( ' ' )[0]; })
           echo "::set-output name=asset::git-together-${GITHUB_REF#refs/*/}-${triple}.zip"
 
       - name: Set Non-Windows Asset Names
+        if: matrix.os != 'windows-latest'
         id: non_windows
-      - if: matrix.os != 'windows-latest'
         run: |
           triple=$(rustup show active-toolchain | awk '{print $1}')
           echo "::set-output name=asset::git-together-${GITHUB_REF#refs/*/}-${triple}.tar.gz"
